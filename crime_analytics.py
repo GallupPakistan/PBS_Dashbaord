@@ -4,6 +4,9 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import loaders as L
+import chart_helpers as CH
+
+bar = CH.bar
 
 PALETTE = ["#2C5F8A", "#C1440E", "#4C8C4A", "#8A5FC1", "#C19A2C",
            "#3A9BA0", "#B03A5B", "#6B6B6B", "#5B7C99", "#9C6B30"]
@@ -42,34 +45,19 @@ def render_crime_annual():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Total reported crimes over time")
-        fig = px.line(df, x="Year", y="All Reported", markers=True, color_discrete_sequence=[PALETTE[0]])
+        plot_df, is_pct = CH.toggle_pct(df, "All Reported")
+        fig = px.line(plot_df, x="Year", y="All Reported", markers=True, color_discrete_sequence=[PALETTE[0]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
-                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
-        fig.add_scatter(x=df["Year"], y=df["All Reported"].rolling(3).mean(), mode="lines",
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _tr.update(texttemplate='%{y:,.1f}%' if is_pct else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+        fig.add_scatter(x=plot_df["Year"], y=plot_df["All Reported"].rolling(3).mean(), mode="lines",
                          name="3-yr avg", line=dict(dash="dash", color=PALETTE[1]))
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("2. Year-over-year % change")
         yoy = df.copy()
         yoy["YoY %"] = df["All Reported"].pct_change() * 100
-        fig = px.bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -93,7 +81,7 @@ def render_crime_annual():
         melt = df.melt(id_vars="Year", value_vars=selected, var_name="Type", value_name="Count")
         fig = px.line(melt, x="Year", y="Count", color="Type", markers=True, color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         st.plotly_chart(fig, use_container_width=True)
@@ -111,7 +99,7 @@ def render_crime_annual():
         melt = idx.melt(id_vars="Year", value_vars=crime_cols, var_name="Type", value_name="Index")
         fig = px.line(melt, x="Year", y="Index", color="Type", color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         fig.add_hline(y=100, line_dash="dot", line_color="gray")
@@ -124,43 +112,13 @@ def render_crime_annual():
             "Type": crime_cols,
             "Growth %": [(df[c].iloc[-1] - df[c].iloc[0]) / df[c].iloc[0] * 100 for c in crime_cols]
         }).sort_values("Growth %")
-        fig = px.bar(growth, x="Growth %", y="Type", orientation="h",
+        bar(growth, x="Growth %", y="Type", orientation="h",
                      color="Growth %", color_continuous_scale="RdYlGn_r")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("9. Ranking — average annual share by type")
         avg_share = (df[crime_cols].sum() / df["All Reported"].sum() * 100).sort_values(ascending=False)
-        fig = px.bar(x=avg_share.values, y=avg_share.index, orientation="h",
+        bar(x=avg_share.values, y=avg_share.index, orientation="h",
                      labels={"x": "% of all reported crime (avg)", "y": ""}, color_discrete_sequence=[PALETTE[2]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
 
     section("10. Full data table with computed YoY %")
     show = df.copy()
@@ -193,23 +151,8 @@ def render_crime_province():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Total crimes by province/region (ranked)")
-        fig = px.bar(x=prov_totals.index, y=prov_totals.values, color=prov_totals.index,
+        bar(x=prov_totals.index, y=prov_totals.values, color=prov_totals.index,
                      color_discrete_sequence=PALETTE, labels={"x": "", "y": "Total reported"})
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("2. Share of national total by province")
         fig = px.pie(names=prov_totals.index, values=prov_totals.values, hole=0.45, color_discrete_sequence=PALETTE)
@@ -219,44 +162,13 @@ def render_crime_province():
     c1, c2 = st.columns(2)
     with c1:
         section("3. Crime type by province (grouped)")
-        fig = px.bar(df, x="Offence", y=provinces, barmode="group", color_discrete_sequence=PALETTE)
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(df, x="Offence", y=provinces, barmode="group", color_discrete_sequence=PALETTE, tickangle=-35)
     with c2:
         section("4. Composition (100% stacked) by province")
         share_df = df.set_index("Offence")[provinces]
         share_pct = share_df.div(share_df.sum(axis=0), axis=1) * 100
         melt = share_pct.reset_index().melt(id_vars="Offence", var_name="Province", value_name="Share %")
-        fig = px.bar(melt, x="Province", y="Share %", color="Offence", color_discrete_sequence=PALETTE)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(melt, x="Province", y="Share %", color="Offence", color_discrete_sequence=PALETTE)
 
     section("5. Heatmap — offence type × province")
     pivot = df.set_index("Offence")[provinces]
@@ -272,13 +184,7 @@ def render_crime_province():
     with c2:
         section("7. Punjab vs Sindh — direct comparison")
         if "Punjab" in df.columns and "Sindh" in df.columns:
-            fig = px.bar(df, x="Offence", y=["Punjab", "Sindh"], barmode="group", color_discrete_sequence=PALETTE)
-            fig.update_xaxes(tickangle=-35)
-            orient = fig.data[0].orientation if fig.data else 'v'
-            tmpl = '%{x:,.0f}' if orient == 'h' else '%{y:,.0f}'
-            fig.update_traces(texttemplate=tmpl, textposition='outside')
-            fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
-            st.plotly_chart(fig, use_container_width=True)
+            bar(df, x="Offence", y=["Punjab", "Sindh"], barmode="group", tickangle=-35)
 
     section("8. Offence mix — treemap (province → offence)")
     tree = df.melt(id_vars="Offence", value_vars=provinces, var_name="Province", value_name="Count")
@@ -290,33 +196,12 @@ def render_crime_province():
     with c1:
         section("9. Offence type ranking (national total)")
         off_total = df.set_index("Offence")[provinces].sum(axis=1).sort_values(ascending=False)
-        fig = px.bar(x=off_total.values, y=off_total.index, orientation="h", color_discrete_sequence=[PALETTE[3]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(x=off_total.values, y=off_total.index, orientation="h", color_discrete_sequence=[PALETTE[3]])
     with c2:
         section("10. Smaller regions comparison (Islamabad / GB / AJK / Railways)")
         small = [p for p in provinces if p in ("Islamabad", "G.B", "AJK", "Railways")]
         if small:
-            fig = px.bar(df, x="Offence", y=small, barmode="group", color_discrete_sequence=PALETTE)
-            fig.update_xaxes(tickangle=-35)
-            orient = fig.data[0].orientation if fig.data else 'v'
-            tmpl = '%{x:,.0f}' if orient == 'h' else '%{y:,.0f}'
-            fig.update_traces(texttemplate=tmpl, textposition='outside')
-            fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
-            st.plotly_chart(fig, use_container_width=True)
+            bar(df, x="Offence", y=small, barmode="group", tickangle=-35)
 
     st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -343,22 +228,7 @@ def render_cyber_crime():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Complaints by type (ranked)")
-        fig = px.bar(df_sorted, x="Total", y="Crime Type", orientation="h", color_discrete_sequence=[PALETTE[0]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(df_sorted, x="Total", y="Crime Type", orientation="h", color_discrete_sequence=[PALETTE[0]])
     with c2:
         section("2. Share of total complaints")
         fig = px.pie(df, names="Crime Type", values="Total", hole=0.45, color_discrete_sequence=PALETTE)
@@ -369,66 +239,18 @@ def render_cyber_crime():
     with c1:
         section("3. Gender breakdown by type (stacked)")
         melt = df.melt(id_vars="Crime Type", value_vars=["Male", "Female", "Transgender"], var_name="Gender", value_name="Count")
-        fig = px.bar(melt, x="Crime Type", y="Count", color="Gender", color_discrete_sequence=PALETTE)
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(melt, x="Crime Type", y="Count", color="Gender", color_discrete_sequence=PALETTE, tickangle=-35)
     with c2:
         section("4. Gender composition (100% stacked)")
         gdf = df.set_index("Crime Type")[["Male", "Female", "Transgender"]]
         gpct = gdf.div(gdf.sum(axis=1), axis=0) * 100
         melt = gpct.reset_index().melt(id_vars="Crime Type", var_name="Gender", value_name="Share %")
-        fig = px.bar(melt, x="Crime Type", y="Share %", color="Gender", color_discrete_sequence=PALETTE)
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(melt, x="Crime Type", y="Share %", color="Gender", color_discrete_sequence=PALETTE, tickangle=-35)
 
     c1, c2 = st.columns(2)
     with c1:
         section("5. Male vs Female — direct comparison")
-        fig = px.bar(df_sorted, x="Crime Type", y=["Male", "Female"], barmode="group", color_discrete_sequence=PALETTE)
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(df_sorted, x="Crime Type", y=["Male", "Female"], barmode="group", color_discrete_sequence=PALETTE, tickangle=-35)
     with c2:
         section("6. Treemap of all complaint categories")
         fig = px.treemap(df, path=["Crime Type"], values="Total", color_discrete_sequence=PALETTE)
@@ -453,43 +275,12 @@ def render_cyber_crime():
         ratio = df.copy()
         ratio["Female_safe"] = ratio["Female"].replace(0, float("nan"))
         ratio["M:F ratio"] = (ratio["Male"] / ratio["Female_safe"]).round(1)
-        fig = px.bar(ratio.sort_values("M:F ratio", ascending=False), x="Crime Type", y="M:F ratio", color_discrete_sequence=[PALETTE[4]])
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(ratio.sort_values("M:F ratio", ascending=False), x="Crime Type", y="M:F ratio", color_discrete_sequence=[PALETTE[4]], tickangle=-35)
 
     section("9. Transgender complaints — where they occur")
     tg = df[df["Transgender"] > 0].sort_values("Transgender", ascending=False)
     if len(tg):
-        fig = px.bar(tg, x="Crime Type", y="Transgender", color_discrete_sequence=[PALETTE[5]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(tg, x="Crime Type", y="Transgender", color_discrete_sequence=[PALETTE[5]])
     else:
         st.info("No transgender-attributed complaints recorded in this dataset.")
 
@@ -522,28 +313,13 @@ def render_month_wise():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Total crimes by month (seasonality)")
-        fig = px.bar(x=months, y=total_by_month.values, color=total_by_month.values,
+        bar(x=months, y=total_by_month.values, color=total_by_month.values,
                      color_continuous_scale="OrRd", labels={"x": "", "y": "Count"})
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("2. Cumulative crimes through the year")
         fig = px.line(x=months, y=total_by_month.cumsum().values, markers=True, color_discrete_sequence=[PALETTE[0]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         st.plotly_chart(fig, use_container_width=True)
@@ -555,7 +331,7 @@ def render_month_wise():
         melt = sub.melt(id_vars="Crime Type", value_vars=months, var_name="Month", value_name="Count")
         fig = px.line(melt, x="Month", y="Count", color="Crime Type", markers=True, color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         st.plotly_chart(fig, use_container_width=True)
@@ -568,23 +344,7 @@ def render_month_wise():
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("5. Total for the year by crime type")
-        fig = px.bar(df.sort_values("Total", ascending=False), x="Crime Type", y="Total", color_discrete_sequence=[PALETTE[1]])
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(df.sort_values("Total", ascending=False), x="Crime Type", y="Total", color_discrete_sequence=[PALETTE[1]], tickangle=-35)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -596,45 +356,13 @@ def render_month_wise():
         section("7. Seasonal index (month value vs monthly average)")
         avg = total_by_month.mean()
         idx = (total_by_month / avg * 100).round(1)
-        fig = px.bar(x=months, y=idx.values, color=idx.values, color_continuous_scale="RdYlGn_r",
-                     labels={"x": "", "y": "Index (100 = avg)"})
-        fig.add_hline(y=100, line_dash="dot")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(x=months, y=idx.values, title="", labels={"x": "", "y": "Index (100 = avg)"}, hline=100)
 
     c1, c2 = st.columns(2)
     with c1:
         section("8. Volatility — which crime types swing most month to month")
         vol = df.set_index("Crime Type")[months].std(axis=1).sort_values(ascending=False)
-        fig = px.bar(x=vol.values, y=vol.index, orientation="h", color_discrete_sequence=[PALETTE[2]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(x=vol.values, y=vol.index, orientation="h", color_discrete_sequence=[PALETTE[2]])
     with c2:
         section("9. Peak month per crime type")
         peak = df.set_index("Crime Type")[months].idxmax(axis=1)
@@ -658,23 +386,7 @@ def render_district():
         st.dataframe(df, use_container_width=True, hide_index=True)
         row = df.iloc[0]
         section("Crime type breakdown")
-        fig = px.bar(x=metrics, y=[row[m] for m in metrics], color_discrete_sequence=[PALETTE[0]])
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(x=metrics, y=[row[m] for m in metrics], color_discrete_sequence=[PALETTE[0]], tickangle=-35)
         return
 
     top10 = df.sort_values("All Reported", ascending=False).head(10)
@@ -692,40 +404,10 @@ def render_district():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Top 10 districts by total reported crime")
-        fig = px.bar(top10, x="All Reported", y="District", orientation="h", color_discrete_sequence=[PALETTE[1]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(top10, x="All Reported", y="District", orientation="h", color_discrete_sequence=[PALETTE[1]])
     with c2:
         section("2. Bottom 10 districts by total reported crime")
-        fig = px.bar(bottom10, x="All Reported", y="District", orientation="h", color_discrete_sequence=[PALETTE[2]])
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(bottom10, x="All Reported", y="District", orientation="h", color_discrete_sequence=[PALETTE[2]])
 
     c1, c2 = st.columns(2)
     with c1:
@@ -742,23 +424,7 @@ def render_district():
     dsel = st.selectbox("District", df["District"].tolist(), key="dc_district")
     row = df[df["District"] == dsel].iloc[0]
     other_metrics = [m for m in metrics if m != "All Reported"]
-    fig = px.bar(x=other_metrics, y=[row[m] for m in other_metrics], color_discrete_sequence=[PALETTE[4]])
-    fig.update_xaxes(tickangle=-35)
-    orient = fig.data[0].orientation if fig.data else 'v'
-    axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-    is_pct = '%' in axis_title
-    n_traces = len(fig.data)
-    if 1 < n_traces <= 4:
-        for tr in fig.data:
-            nm = tr.name or ''
-            fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-            tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-    else:
-        vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-        fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-    fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                       margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-    st.plotly_chart(fig, use_container_width=True)
+    bar(x=other_metrics, y=[row[m] for m in other_metrics], color_discrete_sequence=[PALETTE[4]], tickangle=-35)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -767,23 +433,7 @@ def render_district():
         share_df = top10.set_index("District")[comp_cols]
         share_pct = share_df.div(share_df.sum(axis=1), axis=0) * 100
         melt = share_pct.reset_index().melt(id_vars="District", var_name="Type", value_name="Share %")
-        fig = px.bar(melt, x="District", y="Share %", color="Type", color_discrete_sequence=PALETTE)
-        fig.update_xaxes(tickangle=-35)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(melt, x="District", y="Share %", color="Type", color_discrete_sequence=PALETTE, tickangle=-35)
     with c2:
         section("7. Murder vs Robbery across districts (scatter)")
         if "Murder" in df.columns and "Robbery" in df.columns:
@@ -831,52 +481,38 @@ def render_traffic_yearly():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Total accidents over time (with trend line)")
-        fig = px.line(df, x="Year", y="Total Accidents", markers=True, color_discrete_sequence=[PALETTE[0]])
+        plot_df, is_pct = CH.toggle_pct(df, "Total Accidents")
+        fig = px.line(plot_df, x="Year", y="Total Accidents", markers=True, color_discrete_sequence=[PALETTE[0]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
-                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
-        fig.add_scatter(x=df["Year"], y=df["Trend (linear)"], mode="lines", name="Trend",
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _tr.update(texttemplate='%{y:,.1f}%' if is_pct else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+        _trend_vals = np.poly1d(np.polyfit(range(len(plot_df)), plot_df["Total Accidents"], 1))(range(len(plot_df)))
+        fig.add_scatter(x=plot_df["Year"], y=_trend_vals, mode="lines", name="Trend",
                          line=dict(dash="dash", color=PALETTE[1]))
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("2. Fatal vs Non-fatal accidents")
         melt = df.melt(id_vars="Year", value_vars=["Fatal", "Non-Fatal"], var_name="Type", value_name="Count")
-        fig = px.bar(melt, x="Year", y="Count", color="Type", color_discrete_sequence=PALETTE)
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(melt, x="Year", y="Count", color="Type", color_discrete_sequence=PALETTE)
 
     c1, c2 = st.columns(2)
     with c1:
         section("3. Killed vs Injured over time (with trend lines)")
-        fig = px.line(df, x="Year", y=["Killed", "Injured"], markers=True, color_discrete_sequence=PALETTE)
+        plot_df, is_pct = CH.toggle_pct(df, ["Killed", "Injured"])
+        fig = px.line(plot_df, x="Year", y=["Killed", "Injured"], markers=True, color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
-                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _tr.update(texttemplate='%{y:,.1f}%' if is_pct else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         for col, color in zip(["Killed", "Injured"], PALETTE[2:4]):
-            tr = np.poly1d(np.polyfit(range(len(df)), df[col], 1))(range(len(df)))
-            fig.add_scatter(x=df["Year"], y=tr, mode="lines", name=f"{col} trend",
+            tr = np.poly1d(np.polyfit(range(len(plot_df)), plot_df[col], 1))(range(len(plot_df)))
+            fig.add_scatter(x=plot_df["Year"], y=tr, mode="lines", name=f"{col} trend",
                              line=dict(dash="dot", color=color), showlegend=True)
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("4. Fatality rate trend (Killed / Total accidents)")
         fig = px.line(df, x="Year", y="Fatality Rate %", markers=True, color_discrete_sequence=[PALETTE[1]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         tr = np.poly1d(np.polyfit(range(len(df)), df["Fatality Rate %"], 1))(range(len(df)))
@@ -888,27 +524,12 @@ def render_traffic_yearly():
         section("5. Year-over-year % change in accidents")
         yoy = df.copy()
         yoy["YoY %"] = df["Total Accidents"].pct_change() * 100
-        fig = px.bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
     with c2:
         section("6. Vehicles involved over time (with trend line)")
         fig = px.area(df, x="Year", y="Total Vehicles Involved", color_discrete_sequence=[PALETTE[2]])
         for _tr in fig.data:
-            if len(_tr.x) <= 12:
+            if len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+text')
         tr = np.poly1d(np.polyfit(range(len(df)), df["Total Vehicles Involved"], 1))(range(len(df)))
@@ -921,7 +542,7 @@ def render_traffic_yearly():
         df["Injured/Accident"] = (df["Injured"] / df["Total Accidents"]).round(2)
         fig = px.line(df, x="Year", y="Injured/Accident", markers=True, color_discrete_sequence=[PALETTE[3]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         tr = np.poly1d(np.polyfit(range(len(df)), df["Injured/Accident"], 1))(range(len(df)))
@@ -970,24 +591,24 @@ def render_appeals():
     c1, c2 = st.columns(2)
     with c1:
         section("1. Pending appeals/petitions over time (with trend line)")
-        fig = px.line(df, x="Year", y="Pending", markers=True, color_discrete_sequence=[PALETTE[0]])
+        plot_df, is_pct = CH.toggle_pct(df, "Pending")
+        fig = px.line(plot_df, x="Year", y="Pending", markers=True, color_discrete_sequence=[PALETTE[0]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
-                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
-        tr = np.poly1d(np.polyfit(range(len(df)), df["Pending"], 1))(range(len(df)))
-        fig.add_scatter(x=df["Year"], y=tr, mode="lines", name="Trend", line=dict(dash="dash", color=PALETTE[1]))
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _tr.update(texttemplate='%{y:,.1f}%' if is_pct else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+        tr = np.poly1d(np.polyfit(range(len(plot_df)), plot_df["Pending"], 1))(range(len(plot_df)))
+        fig.add_scatter(x=plot_df["Year"], y=tr, mode="lines", name="Trend", line=dict(dash="dash", color=PALETTE[1]))
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("2. Fresh registered vs Disposed off (with trend lines)")
-        fig = px.line(df, x="Year", y=["Fresh Registered", "Disposed off"], markers=True, color_discrete_sequence=PALETTE)
+        plot_df2, is_pct2 = CH.toggle_pct(df, ["Fresh Registered", "Disposed off"])
+        fig = px.line(plot_df2, x="Year", y=["Fresh Registered", "Disposed off"], markers=True, color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
-                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _tr.update(texttemplate='%{y:,.1f}%' if is_pct2 else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         for col, color in zip(["Fresh Registered", "Disposed off"], PALETTE[2:4]):
-            tr = np.poly1d(np.polyfit(range(len(df)), df[col], 1))(range(len(df)))
-            fig.add_scatter(x=df["Year"], y=tr, mode="lines", name=f"{col} trend", line=dict(dash="dot", color=color))
+            tr = np.poly1d(np.polyfit(range(len(plot_df2)), plot_df2[col], 1))(range(len(plot_df2)))
+            fig.add_scatter(x=plot_df2["Year"], y=tr, mode="lines", name=f"{col} trend", line=dict(dash="dot", color=color))
         st.plotly_chart(fig, use_container_width=True)
 
     c1, c2 = st.columns(2)
@@ -995,38 +616,21 @@ def render_appeals():
         section("3. Disposal rate trend (%)")
         fig = px.line(df, x="Year", y="Disposal Rate %", markers=True, color_discrete_sequence=[PALETTE[1]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         fig.add_hline(y=100, line_dash="dot", line_color="gray")
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section("4. Clearance ratio (Disposed / Fresh registered)")
-        fig = px.bar(df, x="Year", y="Clearance Ratio", color="Clearance Ratio", color_continuous_scale="RdYlGn")
-        fig.add_hline(y=1, line_dash="dot", line_color="gray")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
-
+        bar(df, x="Year", y="Clearance Ratio", hline=1)
     c1, c2 = st.columns(2)
     with c1:
         section("5. Case flow composition (stacked area)")
         melt = df.melt(id_vars="Year", value_vars=["Disposed off", "Pending", "Transferred"], var_name="Status", value_name="Count")
         fig = px.area(melt, x="Year", y="Count", color="Status", color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            if len(_tr.x) <= 12:
+            if len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+text')
         st.plotly_chart(fig, use_container_width=True)
@@ -1034,22 +638,7 @@ def render_appeals():
         section("6. Year-over-year change in backlog (Pending)")
         yoy = df.copy()
         yoy["YoY %"] = df["Pending"].pct_change() * 100
-        fig = px.bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
-        orient = fig.data[0].orientation if fig.data else 'v'
-        axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-        is_pct = '%' in axis_title
-        n_traces = len(fig.data)
-        if 1 < n_traces <= 4:
-            for tr in fig.data:
-                nm = tr.name or ''
-                fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-                tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-        else:
-            vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-            fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-        fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                           margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-        st.plotly_chart(fig, use_container_width=True)
+        bar(yoy, x="Year", y="YoY %", color="YoY %", color_continuous_scale="RdYlGn_r")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -1061,7 +650,7 @@ def render_appeals():
         section("8. Total for disposal over time")
         fig = px.area(df, x="Year", y="Total for Disposal", color_discrete_sequence=[PALETTE[3]])
         for _tr in fig.data:
-            if len(_tr.x) <= 12:
+            if len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+text')
         st.plotly_chart(fig, use_container_width=True)
@@ -1072,7 +661,7 @@ def render_appeals():
         df["Cumulative Pending Change"] = df["Pending"].diff().cumsum()
         fig = px.line(df, x="Year", y="Cumulative Pending Change", markers=True, color_discrete_sequence=[PALETTE[4]])
         for _tr in fig.data:
-            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12:
+            if 'lines' in str(_tr.mode or '') and len(_tr.x) <= 12 and len(fig.data) <= 2:
                 _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
                 _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         st.plotly_chart(fig, use_container_width=True)
