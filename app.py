@@ -9,6 +9,8 @@ import loaders as L
 import crime_analytics as CA
 import tourism_analytics as TA
 import health_analytics as HA
+import media_analytics as MA
+import education_analytics as EA
 import chart_helpers as CH
 
 CH.reset_counter()
@@ -70,7 +72,8 @@ CATEGORY_ICONS = {
     "Crime": "🔴",
     "Tourism & Heritage": "🏛️",
     "Health": "🏥",
-    "Media, Telecom & Education": "📺",
+    "Media & Telecom": "📺",
+    "Education": "🎓",
 }
 
 CATEGORIES = {
@@ -101,11 +104,13 @@ CATEGORIES = {
         "TB by province",
         "Dental doctors (data note below)",
     ],
-    "Media, Telecom & Education": [
+    "Media & Telecom": [
         "Documentary films",
         "Dramas & plays",
         "TV sets by province",
         "Telecom subscribers — monthly",
+    ],
+    "Education": [
         "Education (enrolment/teachers)",
     ],
 }
@@ -190,51 +195,22 @@ def render_dataset(dataset):
     elif dataset == "Dental doctors (data note below)":
         HA.render_hospitals_by_province()
 
-    # ============ MEDIA, TELECOM & EDUCATION ============
+    # ============ MEDIA & TELECOM ============
     elif dataset == "Documentary films":
-        df = L.load_documentary_films()
-        prod_cols = [c for c in df.columns if "Produced" in c]
-        c1, c2 = st.columns(2)
-        with c1:
-            melt = df.melt(id_vars="Year", value_vars=prod_cols, var_name="Region", value_name="Films Produced")
-            bar(melt, "Year", "Films Produced", "Documentary films produced", color="Region", barmode="group")
-        with c2:
-            shares = df[prod_cols].sum()
-            pie(names=shares.index, values=shares.values, title="Share of films produced by region (all years)")
-        st.dataframe(df, use_container_width=True)
+        MA.render_documentary_films()
 
     elif dataset == "Dramas & plays":
-        df = L.load_dramas_plays()
-        line(df, "Year", ["TV Produced", "TV Telecasted"], "Dramas & plays — TV")
-        st.dataframe(df, use_container_width=True)
+        MA.render_dramas_plays()
 
     elif dataset == "TV sets by province":
-        df = L.load_tv_sets()
-        prov_cols = ["Punjab", "Sindh", "KP", "Balochistan"]
-        c1, c2 = st.columns(2)
-        with c1:
-            melt = df.melt(id_vars="Year", value_vars=prov_cols, var_name="Province", value_name="TV Sets")
-            bar(melt, "Year", "TV Sets", "Registered TV sets by province", color="Province")
-        with c2:
-            latest = df.iloc[-1]
-            shares = latest[prov_cols]
-            pie(names=shares.index, values=shares.values, title=f"Province share of TV sets — {int(latest['Year'])}")
-        st.dataframe(df, use_container_width=True)
+        MA.render_tv_sets()
 
     elif dataset == "Telecom subscribers — monthly":
-        year = st.selectbox("Year", [2022, 2023, 2024, 2025])
-        df = L.load_telecom_monthly(year)
-        line(df, "Month", "Total", f"Total mobile subscribers — {year}")
-        st.dataframe(df, use_container_width=True)
+        MA.render_telecom_monthly()
 
+    # ============ EDUCATION ============
     elif dataset == "Education (enrolment/teachers)":
-        df = L.load_education()
-        level = st.selectbox("School level", df["Level"].unique().tolist())
-        metrics = df[df["Level"] == level]["Metric"].unique().tolist()
-        metric = st.selectbox("Metric", metrics)
-        sub = df[(df["Level"] == level) & (df["Metric"] == metric)]
-        line(sub, "Year", "Value", f"{metric} — {level}", color="Stat")
-        st.dataframe(sub, use_container_width=True)
+        EA.render_education()
 
 
 tabs = st.tabs([f"{CATEGORY_ICONS[c]}  {c}" for c in CATEGORIES])
