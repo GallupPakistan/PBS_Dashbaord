@@ -33,10 +33,16 @@ def _get_series(df, level, metric, stat="Total"):
     return sub.sort_values("Year")[["Year", "Value"]].reset_index(drop=True)
 
 
-def render_education():
+SCHOOL_LEVELS = ["Primary Schools", "Middle Schools", "High Schools", "Secondary  Schools"]
+COLLEGE_LEVELS = ["Atrs & Science Colleges", "Professional Colleges", "Secondary Vocational Institutions"]
+UNIVERSITY_LEVELS = ["Universities (Public)", "Universities (Private)", "Universities (Public+Private)"]
+
+
+def render_education(group_levels=None, widget_prefix="edu"):
     df = L.load_education()
-    levels = df["Level"].unique().tolist()
-    level = st.selectbox("Education level", levels, key="edu_level")
+    all_levels = df["Level"].unique().tolist()
+    levels = [l for l in (group_levels or all_levels) if l in all_levels]
+    level = st.selectbox("Education level", levels, key=f"{widget_prefix}_level")
 
     metrics_here = df[df["Level"] == level]["Metric"].unique().tolist()
     enrol_metric = next((m for m in metrics_here if m.startswith("Enrolment")), None)
@@ -152,3 +158,15 @@ def render_education():
     with c2:
         section("10. Full data table — this level")
         st.dataframe(df[df["Level"] == level], use_container_width=True, hide_index=True)
+
+
+def render_schools():
+    render_education(SCHOOL_LEVELS, widget_prefix="edu_sch")
+
+
+def render_colleges():
+    render_education(COLLEGE_LEVELS, widget_prefix="edu_col")
+
+
+def render_universities():
+    render_education(UNIVERSITY_LEVELS, widget_prefix="edu_uni")
