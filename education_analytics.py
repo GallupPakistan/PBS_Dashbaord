@@ -64,11 +64,14 @@ def render_education(group_levels=None, widget_prefix="edu"):
     latest_num = num.iloc[-1] if len(num) else None
     latest_fpct = female_pct.iloc[-1] if len(female_pct) else None
 
+    enrol_unit = "k" if (enrol_metric and "Thousand" in enrol_metric) else ""
+    teach_unit = "k" if (teach_metric and "Thousand" in teach_metric) else ""
+
     kpi_row([
         (f"Enrolment ({latest_enrol['Year']})" if latest_enrol is not None else "Enrolment",
-         f"{latest_enrol['Value']:,.0f}k" if latest_enrol is not None else "N/A", None),
+         f"{latest_enrol['Value']:,.0f}{enrol_unit}" if latest_enrol is not None else "N/A", None),
         (f"Teachers ({latest_teach['Year']})" if latest_teach is not None else "Teachers",
-         f"{latest_teach['Value']:,.0f}k" if latest_teach is not None else "N/A", None),
+         f"{latest_teach['Value']:,.0f}{teach_unit}" if latest_teach is not None else "N/A", None),
         ("Student:Teacher ratio", f"{latest_ratio['Value']:.1f}" if latest_ratio is not None else "N/A", None),
         ("Female teachers", f"{latest_fpct['Value']:.1f}%" if latest_fpct is not None else "N/A", None),
         ("Enrolment growth", f"{(latest_enrol['Value']-first_enrol['Value'])/first_enrol['Value']*100:+.1f}%" if latest_enrol is not None else "N/A",
@@ -80,7 +83,8 @@ def render_education(group_levels=None, widget_prefix="edu"):
     with c1:
         section("1. Enrolment over time (with trend line)")
         if len(enrol):
-            line(enrol, "Year", "Value", f"Enrolment — {level} (thousands/number)")
+            unit_label = "thousands" if (enrol_metric and "Thousand" in enrol_metric) else "actual count"
+            line(enrol, "Year", "Value", f"Enrolment — {level} ({unit_label})")
         else:
             st.info("No enrolment series for this level.")
     with c2:
