@@ -111,7 +111,9 @@ CATEGORIES = {
         "Telecom subscribers — monthly",
     ],
     "Education": [
-        "Education (enrolment/teachers)",
+        "Schools",
+        "Colleges",
+        "Universities",
     ],
 }
 
@@ -209,8 +211,14 @@ def render_dataset(dataset):
         MA.render_telecom_monthly()
 
     # ============ EDUCATION ============
-    elif dataset == "Education (enrolment/teachers)":
-        EA.render_education()
+    elif dataset == "Schools":
+        EA.render_schools()
+
+    elif dataset == "Colleges":
+        EA.render_colleges()
+
+    elif dataset == "Universities":
+        EA.render_universities()
 
 
 tabs = st.tabs([f"{CATEGORY_ICONS[c]}  {c}" for c in CATEGORIES])
