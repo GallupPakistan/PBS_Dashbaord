@@ -594,21 +594,23 @@ def load_dental_doctors():
 def load_education():
     df = pd.read_excel(f"{DATA_DIR}/Education.xls", sheet_name="cs", header=None)
     years = df.iloc[3, 1:].tolist()
-    level_names = {"Primary Schools", "Middle Schools", "High Schools"}
+    metric_prefixes = ("Number of", "Enrolment", "Teachers", "Students", "Percentage")
     records = []
     current_level, current_metric = None, None
-    for i in range(3, len(df)):
+    for i in range(3, 154):  # row 154+ is footer notes, not data
         label = df.iloc[i, 0]
         if pd.isna(label):
             continue
         label = str(label).strip()
+        if not label:
+            continue
         row_vals = df.iloc[i, 1:].tolist()
         all_num = all(pd.to_numeric(pd.Series(row_vals), errors='coerce').notna())
-        if label in level_names:
-            current_level = label
-            continue
         if not all_num:
-            current_metric = label
+            if label.startswith(metric_prefixes):
+                current_metric = label
+            else:
+                current_level = label
             continue
         if label in ("Total", "Female"):
             for yr, val in zip(years, row_vals):
@@ -617,13 +619,15 @@ def load_education():
                     records.append({"Level": current_level, "Metric": current_metric,
                                      "Stat": label, "Year": yr, "Value": v})
         else:
-            # single-row ratio metrics (no Total/Female split)
             for yr, val in zip(years, row_vals):
                 v = pd.to_numeric(val, errors='coerce')
                 if pd.notna(v):
                     records.append({"Level": current_level, "Metric": label,
                                      "Stat": "Value", "Year": yr, "Value": v})
-    return pd.DataFrame(records)
+    result = pd.DataFrame(records)
+    if not result.empty:
+        result["Year"] = result["Year"].astype(str).str.strip()
+    return result
 
 
 # ---------------- MEDIA & TELECOM ----------------
@@ -635,7 +639,9 @@ def load_documentary_films():
     data = data.iloc[:, 1:]
     data.columns = ["Year", "Federal Produced", "Federal Released", "Punjab Produced", "Punjab Released",
                      "Sindh Produced", "Sindh Released", "KP Produced", "KP Released"]
-    data = data.dropna(subset=["Year"])
+    data["Year"] = data["Year"].astype(str).str.strip()
+    data.loc[data["Year"] == "202021", "Year"] = "2020-21"
+    data = data[data["Year"].str.match(r"^\d{4}-\d{2,4}$", na=False)]
     for c in data.columns[1:]:
         data[c] = pd.to_numeric(data[c].replace("--", None), errors='coerce')
     return data.reset_index(drop=True)
@@ -647,8 +653,9 @@ def load_dramas_plays():
     data = df.iloc[4:].copy()
     data = data.iloc[:, 1:]
     data.columns = ["Year", "TV Produced", "TV Telecasted", "Radio Produced", "Radio Broadcasted"]
-    data = data.dropna(subset=["Year"])
+    data = data[pd.to_numeric(data["Year"], errors='coerce').notna()]
     for c in data.columns[1:]:
+        data[c] = data[c].astype(str).str.replace("*", "", regex=False).str.strip()
         data[c] = pd.to_numeric(data[c].replace({"Nil": 0}), errors='coerce')
     return data.reset_index(drop=True)
 
@@ -663,6 +670,7 @@ def load_tv_sets():
     data = data[pd.to_numeric(data["Year"], errors='coerce').notna()]
     for c in data.columns[1:]:
         data[c] = pd.to_numeric(data[c], errors='coerce')
+    data = data.drop_duplicates(subset=["Year"])
     return data.reset_index(drop=True)
 
 
@@ -677,7 +685,8 @@ def load_telecom_monthly(year):
     df = pd.read_excel(files[year], sheet_name="Telecom", header=None)
     data = df.iloc[5:].copy()
     data.columns = ["Month", "Total", "PMCL (Jazz)", "CM Pak", "PTML Ufone", "Telenor", "SCO"]
-    data = data.dropna(subset=["Month"])
+    data["Month"] = data["Month"].astype(str).str.strip()
+    data = data[data["Month"].str.match(r"^[A-Za-z]+$", na=False) & (data["Month"].str.upper() != "TOTAL")]
     for c in data.columns[1:]:
         data[c] = pd.to_numeric(data[c], errors='coerce')
     return data.reset_index(drop=True)
