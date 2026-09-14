@@ -21,47 +21,11 @@ def section(title):
     st.markdown(f"#### {title}")
 
 
-def bar(df=None, x=None, y=None, title="", **kw):
-    if df is not None:
-        fig = px.bar(df, x=x, y=y, title=title, color_discrete_sequence=PALETTE, **kw)
-    else:
-        fig = px.bar(x=x, y=y, title=title, color_discrete_sequence=PALETTE, **kw)
-    orient = fig.data[0].orientation if fig.data else 'v'
-    axis_title = (fig.layout.xaxis.title.text or '') if orient == 'h' else (fig.layout.yaxis.title.text or '')
-    is_pct = '%' in axis_title
-    n_traces = len(fig.data)
-    if 1 < n_traces <= 4:
-        for tr in fig.data:
-            nm = tr.name or ''
-            fmt = f'{nm}: %{{value:,.1f}}%' if is_pct else f'{nm}: %{{value:,.0f}}'
-            tr.update(texttemplate=fmt, textposition='outside', cliponaxis=False)
-    else:
-        vfmt = '%{value:,.1f}%' if is_pct else '%{value:,.0f}'
-        fig.update_traces(texttemplate=vfmt, textposition='outside', cliponaxis=False)
-    fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
-                       margin=dict(r=70, t=40) if orient == 'h' else dict(t=40))
-    st.plotly_chart(fig, use_container_width=True)
+import chart_helpers as CH
+bar = CH.bar
 
 
-def line(df, x, y, title="", trend=True, **kw):
-    fig = px.line(df, x=x, y=y, title=title, markers=True, color_discrete_sequence=PALETTE, **kw)
-    for tr in fig.data:
-        if 'lines' in str(tr.mode or ''):
-            is_pct = '%' in str(tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-            tr.update(texttemplate='%{y:,.1f}%' if is_pct else '%{y:,.0f}',
-                      textposition='top center', mode='lines+markers+text')
-    if trend and "color" not in kw:
-        y_cols = y if isinstance(y, list) else [y]
-        for i, col in enumerate(y_cols):
-            yv = pd.to_numeric(df[col], errors="coerce")
-            if yv.notna().sum() >= 3:
-                idx = list(range(len(df)))
-                coeffs = np.polyfit(idx, yv.fillna(yv.mean()), 1)
-                tr = np.poly1d(coeffs)(idx)
-                fig.add_scatter(x=df[x], y=tr, mode="lines", name=f"{col} trend",
-                                 line=dict(dash="dash", color=PALETTE[(i + 5) % len(PALETTE)]))
-    fig.update_layout(uniformtext_minsize=7, uniformtext_mode='hide')
-    st.plotly_chart(fig, use_container_width=True)
+line = CH.line
 
 
 def pie(names, values, title="", hole=0.45):
@@ -320,8 +284,9 @@ def render_zoo_statistics():
     comp_df = pd.concat(comp)
     fig = px.line(comp_df, x="Year", y="Total Visitors", color="Zoo", markers=True, color_discrete_sequence=PALETTE)
     for _tr in fig.data:
-        _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-        _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+        if len(_tr.x) <= 12 and len(fig.data) <= 2:
+            _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
+            _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
     st.plotly_chart(fig, use_container_width=True)
 
     section("10. Full data table")
@@ -358,8 +323,9 @@ def render_tourist_region():
         melt = no_total.melt(id_vars="Region", value_vars=years, var_name="Year", value_name="Arrivals")
         fig = px.line(melt, x="Year", y="Arrivals", color="Region", markers=True, color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-            _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
+            if len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
+                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+markers+text')
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         section(f"2. Region share of arrivals — {latest_year}")
@@ -387,8 +353,9 @@ def render_tourist_region():
         melt = no_total.melt(id_vars="Region", value_vars=years, var_name="Year", value_name="Arrivals")
         fig = px.area(melt, x="Year", y="Arrivals", color="Region", color_discrete_sequence=PALETTE)
         for _tr in fig.data:
-            _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
-            _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+text')
+            if len(_tr.x) <= 12 and len(fig.data) <= 2:
+                _isp = '%' in str(_tr.name or '') or '%' in (fig.layout.yaxis.title.text or '')
+                _tr.update(texttemplate='%{y:,.1f}%' if _isp else '%{y:,.0f}', textposition='top center', mode='lines+text')
         st.plotly_chart(fig, use_container_width=True)
 
     section("7. Heatmap — region × year")
