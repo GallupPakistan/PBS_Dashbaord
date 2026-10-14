@@ -10,6 +10,8 @@ import crime_analytics as CA
 import tourism_analytics as TA
 import heritage_analytics as HR
 import health_analytics as HA
+import health_extra as HX
+import appeals_analytics as AP
 import media_analytics as MA
 import education_analytics as EA
 import chart_helpers as CH
@@ -103,7 +105,8 @@ CATEGORIES = {
         "Traffic accidents — monthly (Islamabad)",
         "Veterinary registrations — monthly",
         "TB by province",
-        "Dental doctors (data note below)",
+        "Dental doctors (registered, PMDC)",
+        "Hospitals, dispensaries & beds by province",
     ],
     "Media & Telecom": [
         "Documentary films",
@@ -152,7 +155,7 @@ def render_dataset(dataset):
     elif dataset == "Traffic accidents — yearly":
         CA.render_traffic_yearly()
     elif dataset == "Appeals & petitions (High Courts)":
-        CA.render_appeals()
+        AP.render_appeals()
 
     # ============ TOURISM & HERITAGE ============
     elif dataset == "Museum visitors 2015–2025":
@@ -195,7 +198,9 @@ def render_dataset(dataset):
     elif dataset == "TB by province":
         HA.render_tb()
 
-    elif dataset == "Dental doctors (data note below)":
+    elif dataset == "Dental doctors (registered, PMDC)":
+        HX.render_dental_doctors()
+    elif dataset == "Hospitals, dispensaries & beds by province":
         HA.render_hospitals_by_province()
 
     # ============ MEDIA & TELECOM ============
