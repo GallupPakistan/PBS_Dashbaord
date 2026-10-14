@@ -394,7 +394,25 @@ def load_immunization_yearly():
             b[c] = pd.to_numeric(b[c].astype(str).str.replace("**", "", regex=False), errors='coerce')
 
     merged = pd.merge(block1, block2, on="Year", how="outer").sort_values("Year")
-    return merged.reset_index(drop=True)
+
+    # 2010-2011 exist only in the older sheet "10-4" (same file); add them.
+    old = pd.read_excel(f"{DATA_DIR}/Immunization-Coverage-Yearly-1.xls", sheet_name="10-4", header=None)
+    num = lambda v: pd.to_numeric(str(v).replace("**", "").replace("--", "").strip() or None, errors="coerce")
+    extra = []
+    for yr in (2010, 2011):
+        r1 = old[old[0].astype(str).str.strip() == str(yr)]
+        if len(r1) < 2:
+            continue
+        a, b = r1.iloc[0], r1.iloc[1]   # first = coverage block 1, second = block 2
+        extra.append({"Year": yr, "Measles": num(a[1]), "BCG": num(a[2]),
+                      "Polio (0+1)": num(a[3]), "Polio II": num(a[4]), "Polio III": num(a[5]),
+                      "TT I": num(b[1]), "TT II": num(b[2]), "TT III": num(b[3]), "TT IV": num(b[4]), "TT V": num(b[5]),
+                      "Pentavalent I": num(b[9]), "Pentavalent II": num(b[10]), "Pentavalent III": num(b[11])})
+    if extra:
+        e = pd.DataFrame(extra)
+        merged = merged[~merged["Year"].isin(e["Year"])]
+        merged = pd.concat([e, merged], ignore_index=True)
+    return merged.sort_values("Year").reset_index(drop=True)
 
 
 @st.cache_data
