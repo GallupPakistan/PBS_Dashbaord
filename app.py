@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore")
 import loaders as L
 import crime_analytics as CA
 import tourism_analytics as TA
+import heritage_analytics as HR
 import health_analytics as HA
 import media_analytics as MA
 import education_analytics as EA
@@ -87,9 +88,9 @@ CATEGORIES = {
         "Appeals & petitions (High Courts)",
     ],
     "Tourism & Heritage": [
-        "Museum visitors — multi-year (2015-2019)",
-        "Heritage site visitors — multi-year (2015-2019)",
-        "Museum visitors — monthly",
+        "Museum visitors 2015–2025",
+        "Heritage site visitors 2015–2025",
+        "Museums & heritage — monthly (2022–2025)",
         "Zoo statistics",
         "Tourist arrivals by region",
         "Tourist arrivals by mode",
@@ -154,14 +155,14 @@ def render_dataset(dataset):
         CA.render_appeals()
 
     # ============ TOURISM & HERITAGE ============
-    elif dataset == "Museum visitors — multi-year (2015-2019)":
-        TA.render_museum_multiyear()
+    elif dataset == "Museum visitors 2015–2025":
+        HR.render_museums()
 
-    elif dataset == "Heritage site visitors — multi-year (2015-2019)":
-        TA.render_heritage_multiyear()
+    elif dataset == "Heritage site visitors 2015–2025":
+        HR.render_heritage()
 
-    elif dataset == "Museum visitors — monthly":
-        TA.render_museum_monthly()
+    elif dataset == "Museums & heritage — monthly (2022–2025)":
+        HR.render_monthly()
 
     elif dataset == "Zoo statistics":
         TA.render_zoo_statistics()
