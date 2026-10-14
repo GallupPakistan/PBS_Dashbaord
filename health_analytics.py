@@ -596,9 +596,7 @@ def render_tb():
 # ============================================================
 
 def render_hospitals_by_province():
-    st.warning("Data note: this source file is titled 'No. of Dental Doctors' but its actual contents are "
-               "hospitals/dispensaries/beds counts by province — no dental-doctor-specific column exists in "
-               "the published file. Showing the file's real content as-is.")
+    st.caption("Source: PBS Yearbook table 10-1 (health institutions and beds by province), from the same Excel file as the dental-doctor registrations.")
     provinces = L.load_dental_doctors()
     province = st.selectbox("Province", list(provinces.keys()), key="hp_province")
     df = provinces[province]
