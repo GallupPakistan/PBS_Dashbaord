@@ -8,6 +8,8 @@ Three tabs, one shared engine:
 Every number comes from heritage_loaders.py (PBS annual + monthly tables).
 Count / % toggles are built in; every '%' is a share or change computed live.
 """
+import re
+from collections import Counter
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -30,8 +32,13 @@ def kpi_row(items):
         c.metric(label, value, delta)
 
 
+_sec = {"n": 0}
+
+
 def section(title):
-    st.markdown(f"#### {title}")
+    """Auto-numbered section heading (numbers stay correct when sections are added)."""
+    _sec["n"] += 1
+    st.markdown(f"#### {_sec['n']}. {re.sub(r'^[0-9]+[.] *', '', title)}")
 
 
 def _mode(key, options=("Count", "%")):
@@ -245,6 +252,104 @@ def _foreign_section(kind, yearly, df):
         st.caption("Small segments are unlabelled to avoid clutter — hover for the exact value.")
 
 
+def _pct(a, b):
+    return f"{(b / a - 1) * 100:+.0f}%" if a else "n/a"
+
+
+def _key_findings(kind, df, yearly, exclude):
+    y = yearly.set_index("Year")
+    lf, fc = y["Like-for-like core sites"], y["Foreigner (core)"]
+    what = "museums" if kind == "museum" else "heritage sites"
+    leaders = {yr: _ranked(df, yr, "Total", exclude).iloc[0]["Place"] for yr in range(FIRST_YEAR, LAST_FULL_YEAR + 1)}
+    top_name, top_n = Counter(leaders.values()).most_common(1)[0]
+    latest_lead = leaders[LAST_FULL_YEAR]
+    fr_lead = _ranked(df, LAST_FULL_YEAR, "Foreigner", exclude).iloc[0]["Place"]
+    prov = df[df["Year"] == LAST_FULL_YEAR].groupby("Province")["Total"].sum()
+    prov_top, prov_share = prov.idxmax(), prov.max() / prov.sum() * 100
+    lines = [
+        f"**Growth before Covid:** like-for-like visits to {what} rose {_pct(lf[2015], lf[2019])} between 2015 "
+        f"({lf[2015]:,.0f}) and 2019 ({lf[2019]:,.0f}).",
+        f"**Covid and recovery:** 2020 was {_pct(lf[2019], lf[2020])} vs 2019; by {LAST_FULL_YEAR} visits were "
+        f"{_pct(lf[2019], lf[LAST_FULL_YEAR])} vs 2019 ({lf[LAST_FULL_YEAR]:,.0f}).",
+        f"**Most popular:** {top_name} was #1 in {top_n} of the {len(leaders)} years"
+        + ("" if latest_lead == top_name else f"; in {LAST_FULL_YEAR} the leader is {latest_lead}") + ".",
+        f"**Foreign visitors:** {fc[2019]:,.0f} in 2019 → {fc[LAST_FULL_YEAR]:,.0f} in {LAST_FULL_YEAR} "
+        f"({_pct(fc[2019], fc[LAST_FULL_YEAR])}, same sites). Most visited by foreigners in {LAST_FULL_YEAR}: {fr_lead}.",
+        f"**Where:** {prov_top} accounts for {prov_share:.0f}% of {LAST_FULL_YEAR} visits.",
+    ]
+    with st.container(border=True):
+        st.markdown("##### Key findings")
+        st.markdown("\n".join(f"- {l}" for l in lines))
+
+
+def _compare_section():
+    section("Museums vs heritage sites")
+    mus = HL.load_place_year("museum")
+    mus = mus[~mus["Place"].isin(LAHORE) & (mus["Year"] <= LAST_FULL_YEAR)]
+    her = HL.load_place_year("heritage")
+    her = her[her["Year"] <= LAST_FULL_YEAR]
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        what = st.radio("Measure", ["All visits", "Foreign visits"], horizontal=True, key="cmp_measure")
+    with c2:
+        mode = _mode("cmp_mode", ("Count", "% of combined"))
+    col = "Total" if what == "All visits" else "Foreigner"
+    a = mus.groupby("Year")[col].sum()
+    b = her.groupby("Year")[col].sum()
+    d = pd.DataFrame({"Museums": a, "Heritage sites": b}).reset_index()
+    d["Year"] = d["Year"].astype(str)
+    if mode == "Count":
+        long = d.melt("Year", var_name="Type", value_name="Value")
+        long["Label"] = long["Value"].map(_k)
+        yt = what
+    else:
+        s = d[["Museums", "Heritage sites"]].sum(axis=1)
+        for c in ["Museums", "Heritage sites"]:
+            d[c] = (d[c] / s * 100).round(1)
+        long = d.melt("Year", var_name="Type", value_name="Value")
+        long["Label"] = long["Value"].map(lambda v: f"{v:.0f}%")
+        yt = f"Share of combined {what.lower()} (%)"
+    fig = px.bar(long, x="Year", y="Value", color="Type", text="Label", barmode="group",
+                 color_discrete_sequence=[PALETTE[0], PALETTE[4]])
+    fig.update_traces(textposition="outside", cliponaxis=False, textfont_size=9)
+    fig.update_layout(yaxis_title=yt, xaxis_title="", margin=dict(t=30), legend=dict(orientation="h", y=-0.15, title=""))
+    _cat_axis(fig, long["Year"].unique())
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Museums exclude Lahore Fort (PBS lists it under both only in 2022–23). Heritage sites are as published: "
+               "Lahore Fort / Shalamar / Jahangir's Tomb are included to 2023 and missing from 2024, which lowers the "
+               "heritage line in 2023–24.")
+
+
+def _province_section(kind, df):
+    section("Province view")
+    full = df[df["Year"] <= LAST_FULL_YEAR]
+    provs = sorted(full["Province"].dropna().unique().tolist())
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        prov = st.selectbox("Province", provs, index=provs.index("Punjab") if "Punjab" in provs else 0,
+                            key=f"{kind}_prov_pick")
+    with c2:
+        mode = _mode(f"{kind}_prov_view_mode", ("Count", "% of national visits"))
+    tot = full.groupby("Year")["Total"].sum()
+    pv = full[full["Province"] == prov].groupby("Year")["Total"].sum().reindex(tot.index).fillna(0)
+    d = pd.DataFrame({"Year": tot.index.astype(str), "Value": pv.values})
+    if mode == "Count":
+        d["Label"] = d["Value"].map(_k)
+        yt = f"Visitors — {prov}"
+    else:
+        d["Value"] = (pv.values / tot.values * 100).round(1)
+        d["Label"] = d["Value"].map(lambda v: f"{v:.1f}%")
+        yt = f"{prov}'s share of national visits (%)"
+    fig = px.bar(d, x="Year", y="Value", text="Label", color_discrete_sequence=[PALETTE[2]])
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_layout(yaxis_title=yt, xaxis_title="", margin=dict(t=30))
+    _cat_axis(fig, d["Year"])
+    st.plotly_chart(fig, use_container_width=True)
+    top = full[(full["Province"] == prov) & (full["Year"] == LAST_FULL_YEAR)].sort_values("Total", ascending=False).head(3)
+    if len(top):
+        st.caption(f"Top sites in {prov}, {LAST_FULL_YEAR}: " + "; ".join(f"{p} ({v:,.0f})" for p, v in zip(top["Place"], top["Total"])))
+
+
 def _top10_section(kind, df, exclude):
     section("5. Top 10 — pick any year")
     years = sorted(df["Year"].unique().tolist())
@@ -418,11 +523,16 @@ def _render_kind(kind):
         (f"Foreign share {LAST_FULL_YEAR}", f"{last['Foreigner']/last['All listed sites']*100:.2f}%", None),
         (f"#1 in {LAST_FULL_YEAR}", _short(top_now["Place"], 22), f"{top_now['Share %']:.1f}% of visits"),
     ])
+    _key_findings(kind, df, yearly, exclude)
     st.divider()
 
     _trend_section(kind, df_trend, core, yearly)
     st.divider()
     _foreign_section(kind, yearly, df_trend)
+    st.divider()
+    _compare_section()
+    st.divider()
+    _province_section(kind, df_trend)
     st.divider()
     metric = _top10_section(kind, df, exclude)
     st.divider()
@@ -433,15 +543,18 @@ def _render_kind(kind):
 
 
 def render_museums():
+    _sec["n"] = 0
     _render_kind("museum")
 
 
 def render_heritage():
+    _sec["n"] = 0
     _render_kind("heritage")
 
 
 # ------------------------------------------------------------------ monthly
 def render_monthly():
+    _sec["n"] = 0
     st.info("**Monthly sheets cover Jan 2022 – Apr 2025.** 2025 stops at April. Lahore Fort, Shalamar Garden and "
             "Jahangir's Tomb are excluded here because PBS reports them only for part of 2022–23 and not afterwards, "
             "which would otherwise distort the monthly pattern. Annual 2015–2024 history is on the other two tabs.")
